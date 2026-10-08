@@ -95,6 +95,8 @@ Fixing these was easy: give each file the extension that matches what's actually
 | HEIC photo | 70 | 379 |
 | MP4 video | 4 | 23 |
 
+**Update:** these are the files `ffprobe` caught. When I later checked the structure of every file with [photo transfer check](https://aalokbhandari.github.io/photo-transfer-check/), it found 861 cut short or empty, including 492 JPEGs that still open but with a grey or green block where the data ran out.
+
 `ffprobe` says it straight out: `moov atom not found` for the videos and `partial file` for the photos. A video file is basically a big block of frames followed by an index (the `moov` box) telling the player where each frame is. In these files the copy stopped before the index, so the frames are there but no player can find them.
 
 **Why I'm sure this happened during the copy and not afterwards:**
