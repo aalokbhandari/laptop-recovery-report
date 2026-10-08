@@ -61,7 +61,7 @@ This is the one that actually bugged me. My iPhone was full, so I plugged it int
 
 My first thought was that they'd got corrupted over time. They hadn't. Here's how I know.
 
-### Problem A: 411 files had the wrong extension
+### Problem A: 409 files had the wrong extension
 
 Every file format starts with a signature. A JPEG starts with `FF D8`. HEIC photos and MOV videos both have `ftyp` at byte 4, followed by `heic` or `qt`. So I read the first few bytes of every file and compared it with the extension:
 
@@ -85,19 +85,22 @@ Windows decides which app opens a file based on the extension, so a photo called
 
 Those 33 `.HEIC` files that are really JPEGs are a big clue. That's exactly what you get when the iPhone converts a photo to JPEG during the transfer but Windows keeps the original name. The iPhone does this conversion when **Settings → Photos → Transfer to Mac or PC** is set to **Automatic**, which is the default.
 
-Fixing these was easy: give each file the extension that matches what's actually inside.
+For 203 of them the name was the only problem, and fixing it was easy: give each file the extension that matches what's actually inside. The other 206 were also cut short, which is problem B.
 
-### Problem B: 310 files were cut short
+### Problem B: 861 files didn't copy completely
 
-| Type | Cut short | Fine |
-|---|---|---|
-| MOV video | 236 | 327 |
-| HEIC photo | 70 | 379 |
-| MP4 video | 4 | 23 |
+| Type | Cut short |
+|---|---|
+| JPEG photo | 492 |
+| MOV video | 235 |
+| HEIC photo | 117 |
+| MP4 video | 15 |
+| PNG | 1 |
+| completely empty | 1 |
 
-**Update:** these are the files `ffprobe` caught. When I later checked the structure of every file with [photo transfer check](https://aalokbhandari.github.io/photo-transfer-check/), it found 861 cut short or empty, including 492 JPEGs that still open but with a grey or green block where the data ran out.
+I didn't see the full size of it at first. `ffprobe` only caught 310 of these. The rest showed up when I checked the structure of every single file. The cut-short JPEGs still open in Windows, just with a grey or green block where the data ran out, and Windows doesn't show any error.
 
-`ffprobe` says it straight out: `moov atom not found` for the videos and `partial file` for the photos. A video file is basically a big block of frames followed by an index (the `moov` box) telling the player where each frame is. In these files the copy stopped before the index, so the frames are there but no player can find them.
+For the ones it does catch, `ffprobe` says it straight out: `moov atom not found` for the videos and `partial file` for the photos. A video file is basically a big block of frames followed by an index (the `moov` box) telling the player where each frame is. In these files the copy stopped before the index, so the frames are there but no player can find them.
 
 **Why I'm sure this happened during the copy and not afterwards:**
 
@@ -116,9 +119,9 @@ I proved this by pulling a perfect thumbnail out of a photo that Windows refuses
 
 ## 5. Getting the photos back
 
-**Wrong extensions (411 files):** all fixed. Rename to the right extension and they open normally.
+**Wrong extension only (203 files):** all fixed. Rename to the right extension and they open normally.
 
-**Cut-short HEIC photos (70 files): mostly recovered.** This was the fun part. Windows rejects a HEIC completely if *any* part is damaged. But each tile is its own little image and can be decoded on its own. So I wrote `scripts/06-recover-heic-tiles.ps1`, which pulls out every tile that survived, stitches them back together, crops and rotates the result, and saves it as a JPG.
+**HEIC photos that wouldn't open at all (70 files): mostly recovered.** This was the fun part. Windows rejects a HEIC completely if *any* part is damaged. But each tile is its own little image and can be decoded on its own. So I wrote `scripts/06-recover-heic-tiles.ps1`, which pulls out every tile that survived, stitches them back together, crops and rotates the result, and saves it as a JPG.
 
 | Result | Photos |
 |---|---|
@@ -130,13 +133,13 @@ I proved this by pulling a perfect thumbnail out of a photo that Windows refuses
 
 The typical photo came back with 81 % of it intact. The missing bit is always at the bottom, because that's where the file got cut off.
 
-**Cut-short videos (240 files): not yet.** The frames are there, but the index is gone. A tool called [untrunc](https://github.com/anthwlock/untrunc) can rebuild the index using a healthy video from the same phone as a reference:
+**Cut-short videos (250 files): not yet.** The frames are there, but the index is gone. A tool called [untrunc](https://github.com/anthwlock/untrunc) can rebuild the index using a healthy video from the same phone as a reference:
 
 ```
 untrunc.exe -s healthy.mov broken.mov
 ```
 
-That's my next step.
+That's my next step. The cut-short JPEGs I'm leaving as they are for now. They open, just with part of the picture missing.
 
 **The real fix** for anything that matters: the originals, if they're still on the phone or in iCloud Photos.
 
@@ -176,15 +179,21 @@ The other scripts check for crashes and memory errors (`01`), display settings (
 1. Set **Settings → Photos → Transfer to Mac or PC → Keep Originals** before you plug in.
 2. Copy in batches of a few hundred, not thousands at once, and keep the phone unlocked.
 3. Compare the number of items on the phone with the number of files on the laptop.
-4. Run a scan like the one above. **A preview is not a check.**
+4. Run [photo transfer check](https://aalokbhandari.github.io/photo-transfer-check/) on the folder. **A preview is not a check.**
 5. Only delete from the phone once everything checks out, and keep a second copy somewhere else for a while.
 6. Install HEIF Image Extensions and HEVC Video Extensions from the Microsoft Store so Windows can open iPhone formats.
 
-## What I want to build next
+## What I built from this
 
 This is a really common situation for students. Phone storage runs out, iCloud costs money, and a Windows laptop with a cable is the free option. But nothing in that chain tells you when something goes wrong. The phone converts silently, Windows copies without checking, and the preview hides the damage until the originals are gone.
 
-I couldn't find a free, simple tool that sits between "copy finished" and "safe to delete from your phone". So that's what I want to make. Point it at your import folder and it tells you what arrived intact, fixes wrong extensions in one click, rescues damaged photos from their tiles, and gives you a clear yes or no on clearing your phone.
+So I made [photo transfer check](https://aalokbhandari.github.io/photo-transfer-check/) ([source](https://github.com/aalokbhandari/photo-transfer-check)). Pick the folder you copied to, and it checks every file in your browser without uploading anything. It tells you straight away whether it's safe to delete from your phone, lists the files to copy again, and gives you a script that renames the ones with the wrong extension.
+
+Longer write-up: [Why my iPhone photos broke after copying them to Windows](https://www.aalokbhandari.com.np/writing/iphone-photos-broken-after-copying-to-windows).
+
+## Thanks
+
+Umang Gupta and Prabesh Sharma, for testing and reviewing.
 
 ## License
 
